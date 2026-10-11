@@ -1,0 +1,127 @@
+name: Build rootless OBS camera deb
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 60
+    env:
+      THEOS: ${{ github.workspace }}/work/theos
+      THEOS_COMMIT: 304e0799973e8145f32e4ca2de6c747a84b758ce
+      SDKS_COMMIT: 0222fd5413cf4b9af096f37b4621afa2688572f7
+      HOMEBREW_NO_AUTO_UPDATE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Locate source and check upload completeness
+        id: layout
+        run: |
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          root = Path.cwd()
+          candidates = []
+          for path in root.rglob('SystemHooks.mm'):
+              relative = path.relative_to(root)
+              if any(part in {'.git', 'work', 'vendor', '.theos'} for part in relative.parts):
+                  continue
+              if (path.parent / 'Makefile').is_file():
+                  candidates.append(path.parent)
+          if len(candidates) != 1:
+              print('::error::Cannot locate one complete OBSBridge source directory. Upload extracted source folders, not only the ZIP or top-level files.')
+              print('Source candidates:', [str(p.relative_to(root)) for p in candidates])
+              raise SystemExit(1)
+          source = candidates[0]
+          required = [
+              'Makefile', 'control', 'OBSBridge.plist', 'SystemHooks.mm',
+              'Receiver.mm', 'Receiver.h', 'Shared.h',
+              'core/Timeline.cpp', 'core/Timeline.hpp',
+              'tests/timeline_tests.cpp', 'tests/check_project.py',
+              'scripts/build_ffmpeg.sh', 'THIRD_PARTY.md',
+              'prefs/Makefile', 'prefs/OBPrefs.m',
+              'prefs/Resources/Info.plist', 'prefs/Resources/Root.plist',
+              'layout/Library/PreferenceLoader/Preferences/OBSBridge.plist',
+          ]
+          missing = [name for name in required if not (source / name).is_file()]
+          if missing:
+              for name in missing:
+                  print(f'::error::Missing source file: {name}. Re-upload this file keeping its folder path.')
+              raise SystemExit(1)
+          directory = source.relative_to(root).as_posix()
+          print('Source directory:', directory)
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
+              output.write(f'source_dir={directory}\n')
+          PY
+      - name: Host audio core tests
+        working-directory: ${{ steps.layout.outputs.source_dir }}
+        run: |
+          mkdir -p work
+          xcrun clang++ -std=c++17 -Wall -Wextra -Werror -O2 \
+            core/Timeline.cpp tests/timeline_tests.cpp -o work/timeline_tests
+          work/timeline_tests
+          python3 tests/check_project.py
+      - name: Build prerequisites
+        run: |
+          brew install make ldid xz
+          echo "$(brew --prefix make)/libexec/gnubin" >> "$GITHUB_PATH"
+      - name: Fixed Theos and patched iOS 16.5 SDK
+        working-directory: ${{ steps.layout.outputs.source_dir }}
+        run: |
+          git init "$THEOS"
+          git -C "$THEOS" remote add origin https://github.com/theos/theos.git
+          git -C "$THEOS" fetch --depth=1 origin "$THEOS_COMMIT"
+          git -C "$THEOS" checkout --detach FETCH_HEAD
+          git -C "$THEOS" submodule update --init --recursive --depth=1
+          git init work/sdk-checkout
+          git -C work/sdk-checkout remote add origin https://github.com/theos/sdks.git
+          git -C work/sdk-checkout sparse-checkout init --cone
+          git -C work/sdk-checkout sparse-checkout set iPhoneOS16.5.sdk
+          git -C work/sdk-checkout fetch --depth=1 origin "$SDKS_COMMIT"
+          git -C work/sdk-checkout checkout --detach FETCH_HEAD
+          mkdir -p "$THEOS/sdks"
+          cp -R work/sdk-checkout/iPhoneOS16.5.sdk "$THEOS/sdks/"
+          echo "IOS_SDK_PATH=$THEOS/sdks/iPhoneOS16.5.sdk" >> "$GITHUB_ENV"
+      - name: Build FFmpeg decoding libraries
+        working-directory: ${{ steps.layout.outputs.source_dir }}
+        run: bash scripts/build_ffmpeg.sh
+      - name: Compile rootless package
+        working-directory: ${{ steps.layout.outputs.source_dir }}
+        run: |
+          make clean package FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=rootless \
+            TARGET=iphone:clang:16.5:15.0
+          test -n "$(find packages -name '*.deb' -print -quit)"
+          {
+            echo "Theos: $THEOS_COMMIT"
+            echo "SDKs: $SDKS_COMMIT; iPhoneOS16.5 SDK, deployment 15.0"
+            echo "FFmpeg: 7.1.5; SHA256 de668509caf9e35e3cd162473441fdb29538c6d96ed080292b3cf9e6fc5d558f"
+            xcrun clang --version
+            echo 'Compile success does NOT certify runtime compatibility.'
+          } > packages/build-info.txt
+          # Retain relinkable objects for the static LGPL dependency.
+          mkdir -p work/relink-inputs
+          cp -R .theos/obj work/relink-inputs/plugin
+          if [ -d prefs/.theos/obj ]; then cp -R prefs/.theos/obj work/relink-inputs/preferences; fi
+          cp -R vendor/ffmpeg/lib work/relink-inputs/ffmpeg
+          cp Makefile work/relink-inputs/
+          tar -czf packages/relink-inputs.tar.gz -C work/relink-inputs .
+          cp work/ffmpeg-7.1.5.tar.xz packages/
+          cp THIRD_PARTY.md vendor/ffmpeg/share/licenses/* packages/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: OBSBridge-rootless-deb
+          path: ${{ steps.layout.outputs.source_dir }}/packages/
+          if-no-files-found: error
+      - name: Upload failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: OBSBridge-build-diagnostics
+          path: |
+            ${{ steps.layout.outputs.source_dir }}/work/ffmpeg-build-*/ffbuild/config.log
+            ${{ steps.layout.outputs.source_dir }}/.theos/obj/
+          if-no-files-found: ignore
