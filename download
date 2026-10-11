@@ -1,0 +1,7 @@
+.theos/
+packages/
+vendor/
+work/
+*.exe
+__pycache__/
+.DS_Store

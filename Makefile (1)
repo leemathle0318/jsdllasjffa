@@ -1,0 +1,16 @@
+ARCHS = arm64 arm64e
+TARGET = iphone:clang:latest:15.0
+THEOS_PACKAGE_SCHEME = rootless
+
+include $(THEOS)/makefiles/common.mk
+TWEAK_NAME = OBSBridge
+OBSBridge_FILES = SystemHooks.mm Receiver.mm core/Timeline.cpp
+OBSBridge_CFLAGS = -I$(THEOS_PROJECT_DIR)/vendor/ffmpeg/include
+OBSBridge_CCFLAGS = -std=c++17
+OBSBridge_OBJCCFLAGS = -fobjc-arc
+OBSBridge_FRAMEWORKS = Foundation AVFoundation CoreMedia CoreVideo CoreImage CoreGraphics AudioToolbox VideoToolbox
+OBSBridge_LIBRARIES = substrate
+OBSBridge_LDFLAGS = -L$(THEOS_PROJECT_DIR)/vendor/ffmpeg/lib -lavformat -lavcodec -lswscale -lswresample -lavutil
+include $(THEOS_MAKE_PATH)/tweak.mk
+SUBPROJECTS += prefs
+include $(THEOS_MAKE_PATH)/aggregate.mk

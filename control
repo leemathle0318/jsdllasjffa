@@ -1,0 +1,9 @@
+Package: local.xiaoguai.obsbridge
+Name: OBS Bridge (prototype)
+Version: 0.1.0
+Architecture: iphoneos-arm64
+Description: Experimental system camera OBS TCP receiver and microphone audio mixer
+Maintainer: Xiaoguai
+Author: Xiaoguai
+Section: Tweaks
+Depends: ellekit, preferenceloader, firmware (>= 15.0), firmware (<< 16.7)

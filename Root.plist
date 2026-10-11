@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict><key>title</key><string>OBS 摄像头</string><key>items</key><array>
+<dict><key>cell</key><string>PSGroupCell</string><key>footerText</key><string>实验版本：系统摄像头 OBS 输入 + 视频声音与真实麦克风混音。仅局域网使用；开启后影响所有经过该系统采集链路的应用。请先测试，不要直接公开直播。</string></dict>
+<dict><key>cell</key><string>PSEditTextCell</string><key>label</key><string>OBS 电脑 IPv4</string><key>key</key><string>PCIP</string><key>defaults</key><string>local.xiaoguai.obsbridge</string><key>get</key><string>readPreferenceValue:</string><key>set</key><string>setPreferenceValue:specifier:</string><key>default</key><string></string><key>placeholder</key><string>例如 192.168.1.100</string><key>keyboard</key><string>NumbersAndPunctuation</string><key>isSecure</key><false/><key>autocapitalizationType</key><string>None</string><key>autocorrectionType</key><string>No</string></dict>
+<dict><key>cell</key><string>PSButtonCell</string><key>label</key><string>开始接收 OBS</string><key>action</key><string>startLive</string></dict>
+<dict><key>cell</key><string>PSButtonCell</string><key>label</key><string>复制手机 TCP 地址</string><key>action</key><string>copyURL</string></dict>
+<dict><key>cell</key><string>PSButtonCell</string><key>label</key><string>查看状态</string><key>action</key><string>showStatus</string></dict>
+<dict><key>cell</key><string>PSButtonCell</string><key>label</key><string>停止并恢复真实摄像头</string><key>action</key><string>stopLive</string></dict>
+<dict><key>cell</key><string>PSGroupCell</string><key>footerText</key><string>OBS：高级输出 → 录制 → 自定义 FFmpeg → 输出到 URL；容器 mpegts，视频 H.264（不含 B 帧），音频 AAC 48 kHz。先点“开始接收”，再在 OBS 开始录制。不要把 TCP 端口暴露到互联网。</string></dict>
+</array></dict></plist>
